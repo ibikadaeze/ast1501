@@ -1,0 +1,113 @@
+
+Xfunc <- function(t=10, T1, nu){
+  1.41 + t -T1 -(2*3.142*sum(nu))
+}
+# Glitch probability
+glitchProb
+
+f<- function(deltaT,t, Xfunc, T1, nu){
+  
+  (5.6115/(1-(Xfunc(t, T1, nu)+(1.379*10^-5*deltaT)))) # * exp(-(406925.3082*log(-X(t, T1,nu)-(1.379*10^-5*deltaT)+1)-log(-X(t, T1,nu)+1)))
+}
+
+output =data.frame(matrix(NA, nrow=10, ncol=3) )
+colnames(output) = c("currentt", "newdeltat", "nuvector") 
+
+t =10
+nuvector = 1e-6
+
+for(i in 1:10){
+  browser()
+  # update current t
+  currentt = t + newdeltat
+  
+  # draw a delta t value from glitchProb( do an accept/reject sampling here)
+  sampled <- data.frame(proposal = runif(10000, 20, 2000))  
+  maxPDF = optimize(f, sampled$proposal, maximum = TRUE, T1 = 7000, t = 10, nu = 1e-6, Xfunc=Xfunc)
+  sampled$y <- runif(1000, 0, maxPDF$objective)
+  sampled$targetDensity <- f(sampled$proposal, t=10, Xfunc,T1=7000,nu = 2e-6)
+  sampled$accepted = ifelse(sampled$y < sampled$targetDensity, yes = TRUE, no = FALSE)
+  histaccepted = hist(sampled$proposal[sampled$accepted], breaks=31, freq=TRUE)
+  maxaccepted = c(histaccepted$breaks[which.max(histaccepted$counts)])
+  newdeltat = maxaccepted
+  
+  #update X(t)
+  newXfunc = Xfunc + newdeltat
+  
+  # draw a new glitch size
+  nuvector <- c(nuvector, runif(1, min = 0, max = 1e-2))
+  
+  #update X(t + deltat)
+  Xt = Xfunc[i] + newdeltat[i] - nuvector[i]
+
+  # save deltat and deltanu
+  output[i, ] = c(currentt[i], newdeltat[i], nuvector[i])
+  
+}
+
+# Random values for deltaT and t
+deltaT = runif(1000, min = 1, max = 10)
+t = runif(1000, min = 10, max = 100)
+
+# Plotting the probability density
+glitchWaitTime = glitchProb(deltaT=22, T1 = 7000, t = 1, nu = 1e-6)
+glitchWaitTime = data.frame(glitchWaitTime)
+plot(glitchWaitTime, xlab = 'delta t', ylab = 'Probability')
+ggplot(glitchWaitTime, aes(x=deltaT, y=t)) +
+  + geom_bin2d()
++ theme_bw()
+
+# Rejection sampling
+# random delta tvalues  (these are like the "x" values)
+
+sampled <- data.frame(proposal = runif(10000, 1, 200))     # delta T
+# find the maximum of the target density using for example the optim() function
+#maxDens = max(sampled$targetDensity, na.rm = T)            # maximum density
+maxPDF = optimize(f(deltaT=22, Xfunc, T1 = 7000, t = 10, nu = 1e-6), c(20,2000), lower = min(20), upper = max(2000), maximum = TRUE, deltaT=22, T1 = 7000, t = 10, nu = 1e-6)
+# random "y" values
+sampled$y <- runif(10000, 0, maxPDF)
+# value of the PDF at delta t (this is like the "y*")
+sampled$targetDensity <- glitchProb(sampled$proposal, t,X,T1,nu) #
+# compare y* to y
+sampled$accepted = ifelse(sampled$y < sampled$targetDensity, yes = TRUE, no = FALSE)
+
+hist(sampled$proposal[sampled$accepted], freq = F, col = "grey", breaks = 1000, xlab = 'delta T', ylab = 'Probability')
+
+plot(sampled$proposal, sampled$targetDensity/maxPDF, col = "red", xlab = 'delta T', ylab = 'Probability')
+
+#how to make a histogram and cdf
+df <- read.csv('psr17.csv')
+deltat <- df$deltat
+plot(deltat, ppois(deltat, 257.01935483871), type = "s", ylab = "PDF, main = "Poisson CDF")
+gaphist = hist(gap, breaks="Scott", xlab = 'Observing gap (days)', main = NULL,las=1, bty="l", col="red", pch=19, cex.lab=1.5, cex.axis=1)
+fig2 = hist(deltat, breaks="Scott", xlab = 'waiting time before glitch (days)', main = NULL)
+ par(new = T)
+ec = ecdf(deltat)
+plot(x = fig2$mids, y=ec(fig2$mids)*max(fig2$counts), col = rgb(0,0,0,alpha=0), axes=F, xlab = 'Waiting time before glitch (days)', main = NULL, ylab = 'Frequency')
+lines(x = fig2$mids, y=ec(fig2$mids)*max(fig2$counts), col ='red')
+axis(4, at=seq(from = 0, to = max(fig2$counts), length.out = 11), labels=seq(0, 1, 0.1), col = 'red', col.axis = 'red')
+mtext(side = 4, line = 3, 'Cumulative Density', col = 'red')
+
+#heaviside function
+x <- seq(-3,5,length=1000)
+x0 <- 1
+y <- heaviside(x,x0)
+plot(x,y,type="l")
+
+#when you use the function pdf() or png() to make a file of the figure, you have to use dev.off() after.
+e.g.
+# open the file to write to
+pdf(file = "myplot1pdf", width=7, height=6)
+#set figuere margin
+par(mar= c(5,5,3,5))
+# make the figure
+plot(.... )
+# close the file to save
+dev.off()
+legend("topleft", legend = c("N(2,2)", "N(0,1)"), 
+       col = c("black", "red"), lwd = 3 * par("cex")) 
+
+title("CDF Plots for Two Normal Distributions")
+
+#how to remove old variables 
+rm(list=ls())

@@ -1,0 +1,272 @@
+
+# define the pdf for the waiting time (equation 1 in our notes)
+pdfwait = function(deltat,X,alpha,to,xo){
+  alpha*((1-(X/xo)-(deltat/to))^((alpha*to)-1))*((1-(X/xo))^(-alpha*to))
+}
+
+#cdf of waiting time
+cdfwait = function(deltat,X,alpha,to,xo){
+  
+  1-(1-((deltat/to)/(1-(X/xo)))^(alpha*to))
+}
+
+# pdf of deltanu
+pdfnu = function(X,Y,d,b){
+  ((1-d)*(g*(Y-X))^(-d))/(Y^(1-d)*(1-b^(1-d)))
+}
+
+#cdf of deltanu
+cdfnu = function(X,Y,d,b){
+  (1-(1-(X/Y))^(1-d))/(1-(b^(1-d)))
+}
+
+GlitchInverseTransform = function (allTis,alldeltanus,alldeltats) {
+ #constants 
+xo = 3.42     #6e-2
+Xt1 = 1.41/xo #dimensionless XT1^+
+to = 4350.97
+alpha = 1.29e-3 #lambda0 #5.6115
+b = 4.5e-5
+d = 1.2
+g = 2*pi 
+# set number of glitches that you want to make
+n = 200
+
+# create empty vectors to store values 
+alldeltanus = vector(length=n-1)
+alldeltats = vector(length=n-1)
+allXofts = vector(length=n) #postglitchlag 
+allTis = vector(length=n)
+allrates = vector(length =n)
+allmjd = vector(length =n)
+
+g1= 2*pi*(0.1+1)
+g2 = 2*pi*(0.01+1)
+g3 = 2*pi*(0.001+1)
+g4 = 2*pi*(1+1)
+g5 = 2*pi*(10+1)
+g6 = 2*pi*(100+1)
+c = 1/(2*pi*86400)
+# define initial values 
+allTis[1] = 1
+allXofts[1] = Xt1*xo   #has dimension rad/day
+allmjd[1] = 46991
+# run a for loop to generate the mock data
+  for(i in 2:200){
+    #Draw a waiting time from inhomogeneous Poisson distribution 
+    r <- runif(1)
+    X = allXofts[i-1] #has dimension rad per day
+    newdeltat = to*(1-X/xo)*(1-(1-r)^(1/(alpha*to)))
+    allTis[i] = allTis[i-1] + newdeltat
+    allmjd[i] = allmjd[i-1] + newdeltat
+    #Evolve lag deterministically up to that glitch epoch
+    Y = allXofts[i-1] + (xo/to)*newdeltat #has dimensions
+    
+    # Draw a glitch size from power law distribution
+    r <- runif(1)
+    newdeltanu = Y*(1-(1-r*(1-b^(1-d)))^(1/(1-d)))
+    allXofts[i] = newdeltanu #has dimension rad/day
+    
+    #Update and record the new system state 
+    alldeltats[i-1] = newdeltat #has dimension in days
+    alldeltanus[i-1] = Y - newdeltanu   #has dimension rad/day
+    #allrates[i] = alpha/(1-allXofts[i])
+    allrates[i] = 5.6115/(1-(allXofts[i]/xo))
+    
+  }
+# output all the values we care about
+output <- data.frame(alldetanus = alldeltanus*c,alldetanus0 = 2*pi*(alldeltanus*c),alldetanus1 = alldeltanus*c*g1,alldetanus2 = alldeltanus*c*g2,alldetanus3 = alldeltanus*c*g3,alldetanus4 = alldeltanus*c*g4,alldetanus5 = alldeltanus*c*g5,alldetanus6 = alldeltanus*c*g6, alldeltats= alldeltats,allXofts=allXofts[1:199],allTis=allTis[1:199],allrates=allrates[1:199],allmjd = allmjd[1:199]) 
+  #output <- data.frame(allXofts=allXofts,allTis=allTis,allrates=allrates,allmjd = allmjd) 
+}
+
+# fill the data frame with simulated data
+set.seed(309)
+mockdata<- GlitchInverseTransform(allTis,alldeltanus,alldeltats)
+sd(mockdata$alldetanus2) 
+
+#resolving glitch epoch issues
+ result_list = list()
+ set.seed(301)
+ for(j in 1:1000){
+# assign output of function to a variable
+result_list[[j]] <- GlitchInverseTransform(allTis,alldeltanus,alldeltats)
+ }
+mockdata<-result_list[[8]]
+#print(result_list)
+mean( unlist(lapply(X =result_list, FUN = function(x) x$allmjd[36])) )
+sd( unlist(lapply(X =result_list, FUN = function(x) x$allmjd[36])) )
+result_list <- data.frame(result_list)
+library(dplyr)
+nu0_m = rowMeans(select(result_list, starts_with("alldetanus0")))
+nu1_m = rowMeans(select(result_list, starts_with("alldetanus1")))
+nu2_m = rowMeans(select(result_list, starts_with("alldetanus2")))
+nu3_m = rowMeans(select(result_list, starts_with("alldetanus3")))
+nu4_m = rowMeans(select(result_list, starts_with("alldetanus4")))
+nu5_m = rowMeans(select(result_list, starts_with("alldetanus5")))
+nu6_m = rowMeans(select(result_list, starts_with("alldetanus6")))
+dt_m =  rowMeans(select(result_list, starts_with("alldeltats")))
+x_m = rowMeans(select(result_list, starts_with("allXofts")))
+rate_m = rowMeans(select(result_list, starts_with("allrates")))
+mjd_m = rowMeans(select(result_list, starts_with("allmjd")))
+t_m = rowMeans(select(result_list, starts_with("allTis")))
+plot(mjd_m,rate_m,type='l')
+hist(nu5_m)
+min(nu6_m)
+max(nu6_m)
+
+unlist(lapply(X =result_list, FUN = function(x) x$allmjd[2]))
+                 
+sd(unlist(lapply(X =result_list, FUN = function(x) sum(x$allmjd< 54928.6)))  )/1000     
+sd(unlist(lapply(X =result_list, FUN = function(x) sum(x$allmjd< 58240))) )/1000
+mean(unlist(lapply(X =result_list, FUN = function(x) sum(x$allmjd< 65059))) )
+                                                        
+
+#plot of N for 1000 data sets
+plot(density(unlist(lapply(X =result_list, FUN = function(x) sum(x$allmjd< 54928.6))) ), main = "", xlab = 'Number of glitches', freq = FALSE,col = 'cyan',bg = 'transparent', cex = 2, lwd = 2, cex.axis = axissize, cex.lab = labelfont)
+lines(density(unlist(lapply(X =result_list, FUN = function(x) sum(x$allmjd< 58240))) ), main = "", xlab = 'Number of glitches', freq = FALSE,col = 'purple',bg = 'transparent',  cex = 2, lwd = 2, cex.axis = axissize, cex.lab = labelfont,add = TRUE)
+abline(v=c(75,36), col=c("purple", "purple"), lty=c(1,2), lwd=c(2, 2))
+#abline(v =75, lty = 2,col = "purple")
+abline(v =75+0.0217, lty = 2,col = "#A020F01A")
+abline(v =75-0.0217, lty = 2,col = "#A020F01A")
+rect(73-0.0217, -0.1, 73+0.0217, 0.03,col = "#A020F01A", border =NA)
+
+abline(v=c(51,31), col=c("cyan", "cyan"), lty=c(1,2), lwd=c(2, 2))
+abline(v =51+0.0175, lty = 2,col = "#00FFFF1A")
+abline(v =51-0.0175, lty = 2,col = "#00FFFF1A")
+rect(51-0.0175, -0.1, 51+0.0175, 0.03,col = "#00FFFF1A", border =NA)
+legend("topright", legend = c(' ~ 23 yrs, Nmean = 51','~ 23 yrs, Nobs = 31', ' ~ 31 yrs, Nmean =73','~ 31 yrs, Nobs = 36'), col=c('cyan','cyan', 'purple', 'purple'), cex = 3,lty=1:2,lwd = 2)
+
+dev.off()
+
+mean(unlist(lapply(X =result_list, FUN = function(x) sum(x$allmjd< 58240))))
+
+#find the number of glitches within 46991 and 54928.6 (23 yrs) 
+plot(density(unlist(lapply(X =result_list, FUN = function(x) sum(x$allmjd< 54928.6))) ))
+sd(unlist(lapply(X =result_list, FUN = function(x) sum(x$allmjd< 54928.6))) )
+unlist(lapply(X =result_list, FUN = function(x) sum(x$allmjd< 54928.6)))
+a <- 73.214
+s <- 17.84
+n <- 1000
+error <- qnorm(0.975)*s/sqrt(n)
+
+result_list[[8]]$allmjd[1:51]
+# ks.test(glitchDat$delta_t, mockdata$alldeltats[1:31], alternative = "two.sided")
+sd(unlist(lapply(X =result_list, FUN = function(x) (mean(x$alldetanus2[1:51]))) ))
+
+(result_list[[i]]$alldetanus0[1:31])
+min(result_list[[1]]$allrates[1:31])
+max(result_list[[1]]$allrates[1:31])
+max(mockdata$allXofts[1:31])
+#checking the size of missed glitches
+plot(density(unlist(lapply(X =result_list, FUN = function(x) sum(x$alldetanus2[1:43]< 5e-7))) ))
+unlist(lapply(X =result_list, FUN = function(x) sum(x$alldetanus2[1:43]< 5e-7)))
+sd(unlist(lapply(X =result_list, FUN = function(x) sum(x$alldetanus2[1:43]> 5e-7 ))))
+
+#check for overlap in simulated delta t and gap time
+mean(unlist(lapply(X =result_list, FUN = function(x) print(overlap(list(x =x$alldeltats[1:31], y = pulsarDat$gap),plot=FALSE)$OV))))
+sd(unlist(lapply(X =result_list, FUN = function(x) print(overlap(list(x =x$alldeltats[1:31], y = pulsarDat$gap),plot=FALSE)$OV))))  
+#check for overlap in simulated delta t and observed delta t
+mean(unlist(lapply(X =result_list, FUN = function(x) print(overlap(list(x =x$alldeltats[1:43], y = glitchDat$delta_t),plot=FALSE)$OV))))
+sd(unlist(lapply(X =result_list, FUN = function(x) print(overlap(list(x =x$alldeltats[1:43], y = glitchDat$delta_t),plot=FALSE)$OV))))  
+
+#check for overlap in simulated and observed deltanus
+overlap(list(x =mockdata$alldeltats[1:51], y = pulsarDat$gap), plot=TRUE)$OV
+        
+mean(unlist(lapply(X =result_list, FUN = function(x) print(overlap(list(x =x$alldetanus6[1:51], y = glitchDat$dF[1:31]),plot=FALSE)$OV))))
+sd(unlist(lapply(X =result_list, FUN = function(x) print(overlap(list(x =x$alldetanus6[1:51], y = glitchDat$dF[1:31]),plot=FALSE)$OV))))  
+dataoverlapnu <- list(x =mockdata$alldeltats[1:43], y = pulsarDat$gapdays)
+outnu <- overlap(dataoverlapnu, plot =TRUE)
+print(outnu$OV)
+#plot(mockdata$alldeltats,mockdata$alldetanus3)
+#plot T39 MJD distribution
+tmjd <- density(unlist(lapply(X =result_list, FUN = function(x) x$allmjd[36])))
+plot(tmjd,xlab ='MJD [T36]',ylab ='Density',ylim=c(0,0.0002),lwd = 2, cex = 2,cex.lab  = 4, cex.axis =4,bg = 'transparent',main='' ,ylog = TRUE)
+abline(v = mean(unlist(lapply(X =result_list, FUN = function(x) x$allmjd[36]))),col = "red",lwd = 2) # predicted by 1000 sim
+abline(v = mean(unlist(lapply(X =result_list, FUN = function(x) x$allmjd[36])))-sd(unlist(lapply(X =result_list, FUN = function(x) x$allmjd[36]))), lty = 2,col = "pink")
+abline(v = mean(unlist(lapply(X =result_list, FUN = function(x) x$allmjd[36])))+sd(unlist(lapply(X =result_list, FUN = function(x) x$allmjd[36]))), lty = 2,col = "pink")
+abline(v = 57784,col = "green",lwd = 2) #predicted by MD19
+abline(v =57784+256.8, lty = 2,col = "#00FF001A")
+abline(v =57784-256.8, lty = 2,col = "#00FF001A")
+abline(v = 58240.781,col = "purple",lwd = 2) #observed
+#sd(unlist(lapply(X =result_list, FUN = function(x) x$allmjd[36])))/1000
+x_vert1 = 51400
+x_vert2 = 55300
+
+#abline(v = quantile(unlist(lapply(X =result_list, FUN = function(x) x$allmjd[36])), c(0.9845)), col = "blue",lwd = 2)
+adjustcolor( "cyan", alpha.f = 0.1) 
+rect(x_vert1, -0.1, x_vert2, 0.02,col = "#FF00001A",border =NA)
+rect(57500, -0.1, 58010, 0.02,col = "#00FF001A",border =NA)
+
+arrows(53340-145.42,0.0001,53340,0.0001, length = 0.15, code=1 , angle = 20,lty=1, lwd=3, col="red") #simulated
+arrows(57784-315.41,0.00005,57784,0.00005, length = 0.15, angle = 20, lty=1,code=1 , lwd=3, col="green") #predicted
+arrows(58240.781-772.191,0.0001,58240.781,0.0001, length = 0.15, angle = 20, lty=1,code=1 , lwd=3, col="purple") #observed
+
+legend("topright", 
+       legend = c('Mean MJD','Predicted MJD','Observed MJD'),
+       col=c('red', 'green', 'purple'),lty=1:1,lwd = 2, cex = 4)
+dev.off()
+
+#quantile(duration, c(.polyg32, .57, .98))
+#result_list = list(NULL)
+#mockdata = replicate(n = 10, expr = (mockdata<- GlitchInverseTransform(allTis,alldeltanus,alldeltats)),  simplify = FALSE )
+#result_list[] <- list(mockdata[]$allTis[-1][36])
+
+
+
+write.csv(x = mockdata$result2, file = paste0("mockdata2i-", Sys.Date()))
+
+#plot hist, pdf and cdf of waiting time
+# open the file to write to
+pdf(file = "cdfwait", width=7, height=6)
+#set figuere margin
+par(mar= c(5,5,3,5))
+
+#cdf function
+cdfwait = function(deltat,X,alpha,to,xo){
+  
+  1-(1-((deltat/to)/(1-(X/xo)))^(alpha*to))
+}
+#pdf function
+pdfwait = function(deltat,X,alpha,to,xo){
+  alpha*((1-(X/xo)-(deltat/to))^((alpha*to)-1))*((1-(X/xo))^(-alpha*to))
+}
+# make a vector of deltat's and a vector of cdfwait(at those deltat's, ...)
+sorted <- order(mockdata$result1$alldeltats)
+orderedX <-  (mockdata$result2$allXofts[-1])[sorted]
+ordereddeltats <- (mockdata$result1$alldeltats)[sorted]
+
+#plot cdf
+cdfvalues <- cdfwait(deltat=c(0, 100), X =1, alpha =  1.29e-3, to = 4350.97, xo = 3.42)
+#changet = runif(34, min =1, max =100)
+plot(cdfvalues)
+
+#plot pdf
+pdfvalues <- pdfwait(deltat = ordereddeltats, X =orderedX, alpha =  1.29e-3, to = 4350.97, xo = 3.42)
+plot(mockdata$result1$alldeltats, pdfvalues, col="red", pch=19, lwd =2,cex.lab=1.5, cex.axis=1)
+
+Waittime = hist(mockdata$result1$alldeltats, breaks= 'Scott', xlab = TeX('$\\Delta t$ (days)'), main = NULL, freq = TRUE)
+ec = ecdf(mockdata$result1$alldeltats)
+plot(ec, col="red", xlab = TeX('$\\Delta t$ (days)'), ylab ='Cumulative Distribution Function (CDF)', main = NULL, pch=19, lwd =2,cex.lab=1, cex.axis=1)
+#plot(x = Waittime$mids, y=ec(Waittime$mids)*max(Waittime$counts), col = rgb(0,0,0,alpha=0), axes=F, xlab = 'Waiting time before glitch (days)', main = NULL, ylab = NULL)
+#lines(x = Waittime$mids, y=ec(Waittime$mids)*max(Waittime$counts), col ='red',lwd =2)
+#plot(x = Waittime$mids, y=ec(Waittime$mids)*max(Waittime$counts),type="l", col="red", pch=19, lwd =2,cex.lab=1.5, cex.axis=1)# col ='red')
+#axis(4, at=seq(from = 0, to = max(Waittime$counts), length.out = 11), labels=seq(0, 1, 0.1), col = 'red', col.axis = 'black', lwd =2)
+#mtext(side = 4, line = 3, 'Cumulative Density', col = 'black')
+box()
+dev.off()
+
+#plot hist, pdf and cdf of glitch sizes
+# open the file to write to
+png(file = "cdfnu.png", width=480, height=480, bg = 'white')
+#set figuere margin
+par(mar= c(5,5,3,5))
+glitchsize = hist(mockdata$result1$alldeltanus/((2*pi)^3), breaks= 'Scott', xlab = TeX('$\\Delta \\nu $ (Hz)'), main = NULL, freq = TRUE)
+ec = ecdf(mockdata$result1$alldeltanus/((2*pi)^3))
+plot(ec, col="red", xlab = 'Glitch sizes (Hz)', ylab ='Cumulative Distribution Function (CDF)', main = NULL, lwd =2,cex.lab=1, cex.axis=1)
+#plot(x = glitchsize$mids, y=ec(glitchsize$mids)*max(glitchsize$counts), col = rgb(0,0,0,alpha=0), axes=F, xlab = 'Glitch sizes', main = NULL, ylab = NULL)
+lines(x = glitchsize$mids, y=ec(glitchsize$mids)*max(glitchsize$counts), col ='red', lwd =2)
+#plot(x = glitchsize$mids, y=ec(glitchsize$mids)*max(glitchsize$counts), col ='red')
+axis(4, at=seq(from = 0, to = max(glitchsize$counts), length.out = 11), labels=seq(0, 1, 0.1), col = 'red', col.axis = 'black', lwd =2)
+mtext(side = 4, line = 3, 'Cumulative Density', col = 'black')
+box()
+dev.off()

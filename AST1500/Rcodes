@@ -1,1 +1,395 @@
+GlitchInverseTransform = function (allTis,alldeltanus,alldeltats) {
+   #constants 
+     xo = 3.42     #6e-2
+     Xt1 = 1.41/xo #dimensionless XT1^+
+     to = 4350.97
+     alpha = 1.29e-3 #lambda0 #5.6115
+     b = 4.5e-5
+     d = 1.2
+     g = 2*pi 
+    # set number of glitches that you want to make
+       n = 10000
+      
+         # create empty vectors to store values 
+         alldeltanus = vector(length=n-1)
+         alldeltats = vector(length=n-1)
+         allXofts = vector(length=n) #postglitchlag 
+         allTis = vector(length=n)
+        
+           # define initial values 
+           allTis[1] = 1
+           allXofts[1] = Xt1*xo   #has dimension rad/day
+           
+             # run a for loop to generate the mock data
+             for(i in 2:10000){
+                 #Draw a waiting time from inhomogeneous Poisson distribution 
+                  r <- runif(1)
+                   X = allXofts[i-1] #has dimension rad per day
+                   newdeltat = to*(1-X/xo)*(1-(1-r)^(1/(alpha*to)))
+                   allTis[i] = allTis[i-1] + newdeltat
+                  
+                     #Evolve lag deterministically up to that glitch epoch
+                     Y = allXofts[i-1] + (xo/to)*newdeltat #has dimensions
+                    
+                       # Draw a glitch size from power law distribution
+                       r <- runif(1)
+                       newdeltanu = Y*(1-(1-r*(1-b^(1-d)))^(1/(1-d)))
+                       allXofts[i] = newdeltanu #has dimension rad/day
+                      
+                         #Update and record the new system state 
+                         alldeltats[i-1] = newdeltat #has dimension in days
+                         alldeltanus[i-1] = Y - newdeltanu   #has dimension rad/day
+                       
+                         }
+          
+             # output all the values we care about
+             
+             output <- list(result1 = data.frame(alldeltanus*2*pi, alldeltats), result2 = data.frame(allXofts, allTis) )
+            
+               output 
+            
+              }
+mockdata <- GlitchInverseTransform(allTis,alldeltanus,alldeltats)
+
+
+
+#ITM for deltat with a constant X
+png(
+  "Ngplot.png",
+  width     = 5,
+  height    = 4,
+  units     = "in",
+  res       = 1000,
+  pointsize = 3
+)
+par(mgp=c(8,4,0),mar = c(9,11,4,2)+0.5)
+
+DT = function(r, X, alpha, xo, to){
+to*(1-X/xo)*(1-(1-r)^(1/(alpha*to)))
+}
+
+labelfont = 4
+pointsize = 2
+axissize = 4
+
+pdeltats5 = DT(r = runif(10000),X = 0.45, xo =3.42, to = 4350.97, alpha =1.29e-3)
+d5<- density(pdeltats5)
+plot(d5, main = "", xlab = TeX('$\\Delta t$ (days)'), col = '#33FFCC', lwd = 2, ylim=c(0,0.009),cex = 2,cex.lab  = labelfont, cex.axis = axissize,bg = 'transparent')
+pdeltats1 = DT(r = runif(10000),X = 1.41, xo =3.42, to = 4350.97, alpha =1.29e-3)
+d1<- density(pdeltats1)
+lines(d1, main = "", xlab = TeX('$\\Delta t$ (days)'), col = '#00FFFF', lwd = 2, cex = 2,cex.lab  = labelfont, cex.axis = axissize,bg = 'transparent')
+pdeltats2 = DT(r = runif(10000),X = 1.98, xo =3.42, to = 4350.97, alpha =1.29e-3)
+d2<- density(pdeltats2)
+lines(d2, main = "", xlab = TeX('$\\Delta t$ (days)'), col = '#00CCCC', lwd = 2, cex = 2,cex.lab  = 2, cex.axis = axissize,bg = 'transparent')
+pdeltats3 = DT(r = runif(10000),X = 2.92, xo =3.42, to = 4350.97, alpha =1.29e-3)
+d3<- density(pdeltats3)
+lines(d3, main = "", xlab = TeX('$\\Delta t$ (days)'), col = '#009999', lwd = 2, cex = 2,cex.lab  = 2, cex.axis = axissize,bg = 'transparent')
+
+#plot true conditional pdfwait
+pdfwait = function(deltat,X,alpha,to,xo){
+  alpha*((1-(X/xo)-(deltat/to))^((alpha*to)-1))*((1-(X/xo))^(-alpha*to))
+}
+curve(pdfwait(x,X= 0.45, alpha =  1.29e-3, to = 4350.97, xo = 3.42),add = TRUE, col = '#FF99CC',lwd = 2, cex = 2, cex.axis = axissize,cex.lab  = 2)
+curve(pdfwait(x,X= 1.41, alpha =  1.29e-3, to = 4350.97, xo = 3.42),add = TRUE, col = '#CC6699',lwd = 2, cex = 2, cex.axis = axissize,cex.lab  = 2)
+curve(pdfwait(x,X= 1.98, alpha =  1.29e-3, to = 4350.97, xo = 3.42),add = TRUE, col = '#CC0066',lwd = 2, cex = 2, cex.axis = axissize,cex.lab  = 2)
+curve(pdfwait(x,X= 2.92, alpha =  1.29e-3, to = 4350.97, xo = 3.42),add = TRUE, col = '#990066',lwd = 2, cex = 2, cex.axis = axissize,cex.lab  = 2)
+
+legend("topright", 
+       legend = c(TeX('KDE for ($X(T_{i-1}^{+}$)) = 0.45'),TeX('KDE for ($X(T_{i-1}^{+}$)) = 1.41'),TeX('KDE for ($X(T_{i-1}^{+}$)) = 1.98'),TeX('KDE for ($X(T_{i-1}^{+}$)) = 2.92'),TeX('PDF($\\Delta t|X(T_{i-1}^{+}$)) = 0.45'), TeX('PDF($\\Delta t|X(T_{i-1}^{+}$)) = 1.41'),TeX('PDF($\\Delta t|X(T_{i-1}^{+}$)) = 1.98'),TeX('PDF($\\Delta t|X(T_{i-1}^{+}$)) = 2.92')),
+       col=c('#33FFCC','#00FFFF','#00CCCC','#009999','#FF99CC', '#CC6699', '#CC0066','#990066'),lty=1:1,lwd = 2, cex = 3)
+dev.off()     
+
+
+#ITM for glitchsizes with a constant deltanu
+DN = function(r, Y, b, d){
+   Y*(1-(1-r*(1-b^(1-d)))^(1/(1-d)))
+}
+pdeltanus1 = DN(r =runif(10000), Y = ( 0.45 + (3.42/4350.97)*400), b = 4.5e-5, d = 1.2)
+nu1<- density(pdeltanus1)
+plot(nu1, ylab ='Density', main = "", xlab = TeX('$\\Delta \\X $ (rad/day)'), col = '#99FF33',lwd = 2,xlim=c(0,3.5),ylim =c(0,50),cex = 2,cex.axis = axissize, cex.lab = labelfont,bg = 'transparent')
+pdeltanus2 = DN(r =runif(10000), Y = ( 1.41 + (3.42/4350.97)*400), b = 4.5e-5, d = 1.2)
+nu2<- density(pdeltanus2)
+lines(nu2,main = "", col = '#66FF33',lwd = 2, cex = 2,cex.axis = axissize, cex.lab = labelfont,bg = 'transparent')
+pdeltanus3 = DN(r =runif(10000), Y = ( 1.98 + (3.42/4350.97)*400), b = 4.5e-5, d = 1.2)
+nu3<- density(pdeltanus3)
+lines(nu3,main = "",  col = '#66CC00',lwd = 2, cex = 2,cex.axis = axissize, cex.lab = labelfont,bg = 'transparent')
+pdeltanus4 = DN(r =runif(10000), Y = ( 2.92 + (3.42/4350.97)*400), b = 4.5e-5, d = 1.2)
+nu4<- density(pdeltanus4)
+lines(nu4,main = "", col = '#339900',lwd = 2, cex = 2,cex.axis = axissize, cex.lab = labelfont,bg = 'transparent')
+# plot true conditional pdf of deltanu
+pdfnu = function(X,Y,d,b){
+  ((1-d)*((Y-X))^(-d))/(Y^(1-d)*(1-b^(1-d)))
+}
+curve(pdfnu(x, Y= 0.45 + (3.42/4350.97)*400, b = 4.5e-5, d = 1.2),add = TRUE, col = '#CCCCFF', lwd = 2, cex = 2, cex.axis = axissize,cex.lab= labelfont)
+curve(pdfnu(x, Y= 1.41 + (3.42/4350.97)*400, b = 4.5e-5, d = 1.2),add = TRUE, col = '#9999FF', lwd = 2, cex = 2, cex.axis = axissize,cex.lab= labelfont)
+curve(pdfnu(x, Y= 1.98 + (3.42/4350.97)*400, b = 4.5e-5, d = 1.2),add = TRUE, col = '#6666FF', lwd = 2, cex = 2, cex.axis = axissize,cex.lab= labelfont)
+curve(pdfnu(x, Y= 2.92 + (3.42/4350.97)*400, b = 4.5e-5, d = 1.2),add = TRUE, col = '#3333FF', lwd = 2, cex = 2, cex.axis = axissize,cex.lab= labelfont)
+text(2.8,28,TeX('$\\Delta t = 400$'), cex = 4, cex.axis = axissize)
+legend("topright", 
+       legend = c(TeX('KDE for ($X(T_{i}^{-}$) = 0.45)'),TeX('KDE for ($X(T_{i}^{-}$) = 1.41)'),TeX('KDE for ($X(T_{i}^{-}$) = 1.98)'),TeX('KDE for ($X(T_{i}^{-}$) = 2.92)'),TeX('PDF($\\Delta \\nu |X(T_{i}^{-}$) = 0.45)'), TeX('PDF($\\Delta \\nu |X(T_{i}^{-}$) = 1.41)'),TeX('PDF($\\Delta \\nu |X(T_{i}^{-}$) = 1.98)'),TeX('PDF($\\Delta \\nu |X(T_{i}^{-}$) = 2.92)')), 
+       col=c('#99FF33', '#66FF33', '#66CC00','#339900','#CCCCFF','#9999FF','#6666FF','#3333FF'),lty=1:1,lwd = 2, cex = 3)
+dev.off() 
+
+#ITM for glitchsizes with a constant X(t) but changing deltat
+DN = function(r, Y, b, d){
+  Y*(1-(1-r*(1-b^(1-d)))^(1/(1-d)))
+}
+
+pdeltanus1 = DN(r =runif(10000), Y = ( 1.98 + (3.42/4350.97)*20), b = 4.5e-5, d = 1.2)
+nu1<- density(pdeltanus1)
+plot(nu1, ylab ='Density', main = "", xlab = TeX('$\\Delta \\X $ (rad/day)'), col = '#99FF33',lwd = 2,xlim=c(0,3),ylim=c(0,20),cex = 2,cex.axis = axissize, cex.lab = labelfont,bg = 'transparent')
+pdeltanus2 = DN(r =runif(10000), Y = ( 1.98 + (3.42/4350.97)*70), b = 4.5e-5, d = 1.2)
+nu2<- density(pdeltanus2)
+lines(nu2,main = "",  col = '#66FF33',lwd = 2, cex = 2,cex.axis = axissize, cex.lab = labelfont,bg = 'transparent')
+pdeltanus3 = DN(r =runif(10000), Y = ( 1.98 + (3.42/4350.97)*200), b = 4.5e-5, d = 1.2)
+nu3<- density(pdeltanus3)
+lines(nu3,main = "",  col = '#66CC00',lwd = 2, cex = 2,cex.axis = axissize, cex.lab = labelfont,bg = 'transparent')
+pdeltanus4 = DN(r =runif(10000), Y = ( 1.98 + (3.42/4350.97)*1000), b = 4.5e-5, d = 1.2)
+nu4<- density(pdeltanus4)
+lines(nu4,main = "",  col = '#339900',lwd = 2, cex = 2,cex.axis = axissize, cex.lab = labelfont,bg = 'transparent')
+# plot true conditional pdf of deltanu
+pdfnu = function(X,Y,d,b){
+  ((1-d)*((Y-X))^(-d))/(Y^(1-d)*(1-b^(1-d)))
+}
+curve(pdfnu(x, Y= 1.98 + (3.42/4350.97)*20, b = 4.5e-5, d = 1.2),add = TRUE, col = '#CCCCFF', lwd = 2, cex = 2, cex.axis = axissize,cex.lab= labelfont)
+curve(pdfnu(x, Y= 1.98 + (3.42/4350.97)*70, b = 4.5e-5, d = 1.2),add = TRUE, col = '#9999FF', lwd = 2, cex = 2, cex.axis = axissize,cex.lab= labelfont)
+curve(pdfnu(x, Y= 1.98 + (3.42/4350.97)*200, b = 4.5e-5, d = 1.2),add = TRUE, col = '#6666FF', lwd = 2, cex = 2, cex.axis = axissize,cex.lab= labelfont)
+curve(pdfnu(x, Y= 1.98 + (3.42/4350.97)*1000, b = 4.5e-5, d = 1.2),add = TRUE, col = '#3333FF', lwd = 2, cex = 2, cex.axis = axissize,cex.lab= labelfont)
+text(0.5,11,TeX('$X(T_{i}^{-}) = 1.98$'), cex = 4, cex.axis = axissize)
+legend("topleft", 
+       legend = c(TeX('KDE for ($X(T_{i}^{-}$) | $\\Delta t = 20$)'),TeX('KDE for ($X(T_{i}^{-}$) | $\\Delta t = 70$)'),TeX('KDE for ($X(T_{i}^{-}$) | $\\Delta t = 200$)'),TeX('KDE for ($X(T_{i}^{-}$) | $\\Delta t = 1000$)'),TeX('PDF($\\Delta \\nu |X(T_{i}^{-}$)) at $\\Delta t = 20$'), TeX('PDF($\\Delta \\nu |X(T_{i}^{-}$)) at $\\Delta t = 70$'),TeX('PDF($\\Delta \\nu |X(T_{i}^{-}$)) at $\\Delta t = 200$'),TeX('PDF($\\Delta \\nu |X(T_{i}^{-}$)) at $\\Delta t = 1000$')), 
+       col=c('#99FF33', '#66FF33', '#66CC00','#339900','#CCCCFF','#9999FF','#6666FF','#3333FF'),lty=1:1,lwd = 2, cex = 3)
+dev.off() 
+
+#ITM for glitchsizes with a constant X(t) and delta t but changing gamma
+
+#plot histogram and densityplots of deltat and gap time
+#c1 <- rgb(173,216,230,max = 255, alpha = 100, names = "lt.blue")
+#c2 <- rgb(255,192,203, max = 255, alpha = 100, names = "lt.pink")
+
+pulsarDat <- read.csv('B1737_updated.csv')
+
+glitchDat<- read.csv('glitch17.csv')
+
+#density plots for observed deltats
+deltatHist <- plot(density(glitchDat$delta_t), breaks = 100, freq = FALSE,col = 'green', bg = 'transparent',lwd =2)
+lines(density(glitchDat$delta_t), col = 'green', lwd =2)
+
+#density plots for simulated deltats
+deltasimHist <- plot(density(mockdata$alldeltats[1:36]), breaks= 100,ylim = c(0,0.004), freq = FALSE,col = '#990000',bg = 'transparent',lwd =2,main = "", xlab = TeX('$\\Delta t $ (days)'), cex = 2,cex.axis = axissize, cex.lab = labelfont)
+#lines(density(mockdata$alldeltats[1:35]),col = '#660000', lwd =2)
+lines(density(mockdata$alldeltats[1:43]),col = '#330000', lwd =2)
+lines(density(glitchDat$delta_t), col = 'purple', lwd =2)
+
+legend("topright", 
+       legend = c(TeX('simulated $\\Delta t $, N = 31'),TeX('simulated $\\Delta t $, N = 43 '),TeX('observed $\\Delta t $')),
+       col=c('#990000', '#330000' , 'purple'),lty=1:1,lwd = 2, cex = 3)
+dev.off()
+
+#lines(density(pulsarDat$gapdays), breaks = 10, freq = FALSE,col = 'red', add=TRUE,lwd =2)
+
+#checking for overlapping percentage
+dataoverlap1 <- list(x =glitchDat$deltat, y = pulsarDat$gapdays )
+dataoverlap2 <- list(x =mockdata$alldeltats[1:31], y = pulsarDat$gapdays )
+dataoverlap3 <- list(x =mockdata$alldeltats[1:43], y = glitchDat$deltat )
+library('overlapping')
+out <- overlap(dataoverlap3, plot =TRUE)
+
+print(out$OV)
+55048.8358533011
+46269.9118399125
+
+#density plots for observed deltanus
+deltatHist <- hist(glitchDat$dF, breaks = 100, freq = FALSE,col = 'green', bg = 'transparent')
+lines(density(glitchDat$dF), col = 'green', lwd =2)
+
+#density plots for simulated deltanus
+deltasimHist <- hist(mockdata$alldetanus0[1:31], breaks= 50, freq = FALSE,col = c1,bg = 'transparent', add = TRUE )
+lines(density(mockdata$alldetanus1[1:31]), col = 'blue', lwd =2)
+deltasimHist <- hist(mockdata$alldetanus6[1:31], breaks= 50, freq = FALSE,col = c2, bg = 'transparent',add=TRUE )
+lines(density(mockdata$alldetanus6[1:31]), glitchDat$dF)
+#hist(mockdata$alldetanus2)
+
+#just densities for deltanus
+plot(density(mockdata$alldetanus0[1:31]),main = "", xlab = TeX('$\\Delta \\nu $ (Hz)'), ylim = c(0,5e6),breaks= 50, freq = FALSE,col = 'green',bg = 'transparent', add = TRUE )
+lines(density(glitchDat$dF), col = 'blue', lwd =2)
+lines(density(mockdata$alldetanus1[1:31]),col = 'pink', lwd =2)
+lines(density(mockdata$alldetanus2[1:31]),col = 'orange', lwd =2)
+lines(density(mockdata$alldetanus3[1:31]),col = 'purple', lwd =2)
+lines(density(mockdata$alldetanus4[1:31]),col = 'red', lwd =2)
+lines(density(mockdata$alldetanus5[1:31]),col = 'black', lwd =2)
+lines(density(mockdata$alldetanus6[1:31]),col = 'darkblue', lwd =2)
+legend("topright", 
+       legend = c(TeX('simulated $\\Delta t $ for N = 31 (59 %)'),TeX('simulated $\\Delta t $ for N = 35 (68 %)'),TeX('simulated $\\Delta t $ for N = 43 (73 %)'),TeX('observed $\\Delta t $ for N = 31')),
+       col=c('#990000', '#660000','#330000' , 'purple'),lty=1:1,lwd = 2, cex = 2)
+dev.off()
+
+dataoverlapnu1 <- list(x =mockdata$alldetanus6[1:31], y = glitchDat$dF)
+dataoverlapnu2 <- list(x =mockdata$alldetanus5[1:43], y =glitchDat$dF )
+#dataoverlapnu2 <- list(x =mockdata$alldetanus6[1:31], y =glitchDat$dF )
+library('overlapping')
+outnu <- overlap(dataoverlapnu2, plot =TRUE)
+print(outnu$OV)
+
+#plot(mockdata$allTis,mockdata$allXofts,type='l',col = 'black', lwd =2,cex = 2)
+plot(mockdata$allTis[0:31],mockdata$allXofts[0:31],type='l',col = 'red', lwd =2,cex = 2)
+lines(mockdata$allTis[0:35],mockdata$allXofts[0:35],type='l',col = 'purple', lwd =2,cex = 2)
+
+#stress history
+plot(result_list[[1]]$allmjd,result_list[[1]]$allXofts,type ='l',col = 'gray', lwd =2,bg = 'transparent', main = "", xlab = ('MJD'),ylab =('X(t) (rad/day)'),cex = 2,cex.axis = axissize, cex.lab = labelfont)
+lines(result_list[[2]]$allmjd,result_list[[2]]$allXofts,type='l',col = 'gray', lwd =2,cex = 2)
+lines(result_list[[6]]$allmjd,result_list[[6]]$allXofts,type='l',col = 'gray', lwd =2,cex = 2)
+lines(result_list[[4]]$allmjd,result_list[[4]]$allXofts,type='l',col = 'gray', lwd =2,cex = 2)
+lines(result_list[[5]]$allmjd,result_list[[5]]$allXofts,type='l',col = 'gray', lwd =2,cex = 2)
+lines(mockdata$allmjd,mockdata$allXofts,type='l',col = 'black', lwd =3,cex = 2)
+
+#trigger rates
+plot(result_list[[1]]$allmjd,result_list[[1]]$allrates,type ='l',col = 'gray', lwd =2,bg = 'transparent', main = "", xlab = ('MJD'),ylab = TeX('$\\lambda$ (t) ($day^{-1}$)'),cex = 2,cex.axis = axissize, cex.lab = labelfont)
+lines(result_list[[2]]$allmjd,result_list[[2]]$allrates,type='l',col = 'gray', lwd =2,cex = 2)
+lines(result_list[[6]]$allmjd,result_list[[6]]$allrates,type='l',col = 'gray', lwd =2,cex = 2)
+lines(result_list[[4]]$allmjd,result_list[[4]]$allrates,type='l',col = 'gray', lwd =2,cex = 2)
+lines(result_list[[5]]$allmjd,result_list[[5]]$allrates,type='l',col = 'gray', lwd =2,cex = 2)
+lines(mockdata$allmjd,mockdata$allrates,type='l',col = 'black', lwd =3,cex = 2)
+
+#periodogram
+ 
+ #barplot(height = glitchDat$dF, width = 0.2, names.arg = glitchDat$MJD)
+#abline(v = mean(mydata), col="red", lwd=3, lty=2)
+library('lomb')
+lsp(mockdata$allXofts)
+
+#bar plot of delta t and gap time (time series)
+ggplot() + 
+  geom_col(aes(x = glitchDat$MJD, y = glitchDat$delta_t), size = 4, color = "darkblue",bg = 'transparent') + xlab('MJD') + ylab('Time (Days)') +  annotate(geom="text", x=47600, y=1000, label="Red bars (observing gap time)", color="red",size=5, fontface="italic") + annotate(geom="text", x=48200, y=960, size=5, fontface="italic",label="Dark-blue bars (waiting time before glitch)", color="darkblue") + theme(text = element_text(size = 30))+
+  geom_col(aes(x = pulsarDat$toa1mjd, y = pulsarDat$gap), size = 4, color="red", group = 1)
+#geom_col(aes(x =48218, y = 3e-6), size = 1, color="red", group = 1)
+
+ggplot() + 
+  geom_col(aes(x = glitchDat$MJD, y = glitchDat$delta_t), size = 4, color = "darkblue",bg = 'transparent') + xlab('MJD') + ylab('Time (Days)')  + theme(text = element_text(size = 30))+
+  geom_col(aes(x = pulsarDat$toa1mjd, y = pulsarDat$gap), size = 4, color="red", group = 1)
+#geom_col(aes(x =48218, y = 3e-6), size = 1, color="red", group = 1)
+
+#time series of glitches
+ggplot() + 
+  geom_col(aes(x = glitchDat$MJD, y = glitchDat$dF), size = 2, color = "orange",bg = 'transparent') + xlab('MJD') + ylab('Time (Days)') + theme(text = element_text(size = 20))
+
+#cdf function
+cdfwait= function(deltat,X,alpha,to,xo){
+  
+  1-(1-((deltat/to)/(1-(X/xo)))^(alpha*to))
+}
+#cdf of deltanu
+cdfnu = function(X,Y,d,b){
+  (1-(1-(X/Y))^(1-d))/(1-(b^(1-d)))
+}
+
+#plot ecdf for deltats
+plot(ecdf(mockdata$alldeltats[0:31]),col ='#990000',bg = 'transparent',lwd =2,main = "",ylab ='ECDF', xlab = TeX('$\\Delta t $ (days)'), cex = 2,cex.axis = axissize, cex.lab = labelfont)
+lines(ecdf(mockdata$alldeltats[0:43]),col ='#330000',cex = 2,cex.axis = axissize, cex.lab = labelfont)
+lines(ecdf(glitchDat$deltat),col ='purple',cex = 2,cex.axis = axissize, cex.lab = labelfont)
+
+legend("bottomright", 
+       legend = c(TeX('simulated $\\Delta t $, N = 31'),TeX('simulated $\\Delta t $, N = 43 '),TeX('observed $\\Delta t $')),
+       col=c('#990000', '#330000' , 'purple'),lty=1:1,lwd = 2, cex = 3)
+
+#plot ecdf for different N
+plot(ecdf(mockdata$alldetanus2[0:31]),xlim = c(0,3.5e-6),col ='lightblue',bg = 'transparent',lwd =2,main = "",ylab ='ECDF', xlab = TeX('$\\Delta \\nu $ (Hz)'), cex = 2,cex.axis = axissize, cex.lab = labelfont)
+#lines(ecdf(mockdata$alldetanus3[0:35]),col ='cyan',cex = 2,cex.axis = axissize, cex.lab = labelfont)
+lines(ecdf(mockdata$alldetanus2[0:43]),col ='darkblue',cex = 2,cex.axis = axissize, cex.lab = labelfont)
+lines(ecdf(glitchDat$dF),col ='black',cex = 2,cex.axis = axissize, cex.lab = labelfont)
+#lines(ecdf(mockdata$alldetanus0),col ='darkblue',cex = 2,cex.axis = axissize, cex.lab = labelfont,type='l')
+legend("bottomright", 
+       legend = c(TeX('$\\gamma_{2}$ for N = 31'),TeX('$\\gamma_{2}$ for N = 43'),'observed'),
+       col=c('lightblue', 'darkblue' ,'black'),lty=1:1,lwd = 2, cex = 4)
+
+
+#plot ecdf for different gamma
+#mockdata$allmjd[1:51]
+par(pty='s')  # force the plot to be square before we start
+k<-ecdf(glitchDat$dF[1:31])
+#plot(k,col ='black',bg = 'transparent', lwd =2,main = "",ylab ='ECDF', xlab = TeX('$\\Delta \\nu $ (Hz)'), cex = 0,cex.axis = axissize, cex.lab = labelfont)
+plot(ecdf(glitchDat$dF[1:31]),col ='black',bg = 'transparent',xlim = c(1e-10,1e-3), lwd =2,main = "",ylab ='ECDF', xlab = TeX('$\\Delta \\nu $ (Hz)'), cex = 0,cex.axis = axissize, cex.lab = labelfont)
+lines(ecdf(mockdata$alldetanus0[0:51]),  xlim = c(1e-10,1e-3), col ='red',cex = 0,cex.axis = axissize, cex.lab = labelfont)
+lines(ecdf(mockdata$alldetanus1[0:51]), xlim = c(1e-10,1e-3),col ='cyan',cex = 0,cex.axis = axissize, cex.lab = labelfont)
+lines(ecdf(mockdata$alldetanus2[0:51]),xlim = c(1e-10,1e-3),col ='darkblue',cex = 0,cex.axis = axissize, cex.lab = labelfont)
+lines(ecdf(mockdata$alldetanus3[0:51]),xlim = c(1e-10,1e-3),col ='darkcyan',cex = 0,cex.axis = axissize, cex.lab = labelfont)
+lines(ecdf(mockdata$alldetanus4[0:51]),xlim = c(1e-10,1e-3),col ='darkred',cex = 0,cex.axis = axissize, cex.lab = labelfont)
+lines(ecdf(mockdata$alldetanus5[0:51]),xlim = c(1e-10,1e-3),col ='darkgreen',cex = 0,cex.axis = axissize, cex.lab = labelfont)
+lines(ecdf(mockdata$alldetanus6[0:51]),xlim = c(1e-10,1e-3),col ='green',cex = 0,cex.axis = axissize, cex.lab = labelfont)
+
+#lines(ecdf(glitchDat$dF),col ='black',cex = 2,cex.axis = axissize, cex.lab = labelfont)
+#lines(ecdf(mockdata$alldetanus0),col ='darkblue',cex = 2,cex.axis = axissize, cex.lab = labelfont,type='l')
+legend("bottomright", 
+       legend = c(TeX('Observed $\\Delta \\nu $'),TeX('$\\gamma_{1} $'),TeX('$\\gamma_{2} $'),TeX('$\\gamma_{3} $'),TeX('$\\gamma_{4} $'),TeX('$\\gamma_{5} $'),TeX('$\\gamma_{6} $'),TeX('$\\gamma_{0} $')),
+       col=c('black', 'cyan','darkblue','darkcyan','darkred','darkgreen','green','pink'),lty=1:1,lwd = 2, cex = 3,bg = 'transparent')
+
+dev.off()
+
+t.test(x, x2, alternative = "g")
+wilcox.test(x, x2, alternative = "g")
+ks.test(x, x2, alternative = "l")
+
+#checking 95 percent confidence level for small and large glitch sizes
+a <- 8.598
+s <- 2.472349
+n <- 1000
+error <- qnorm(0.975)*s/sqrt(n)
+left <- a-error
+right <- a+error
+
+sd(mockdata$alldeltats[1:51])
+
+ecdf.ksCI(glitchDat$delta_t[1:31], main =NULL,ci.col ='gray',col ='black')
+#ecdf.ksCI(mockdata$alldeltats[1:31], ci.col ='lightblue',col ='blue', add =TRUE)
+ecdf.ksCI(mockdata$alldeltats[1:51],col = 'red', ci.col ='pink', add =TRUE)
+
+ks<-ks.test(glitchDat$delta_t[1:36],mockdata$alldeltats[1:73], alternative = "two.sided")
+ks$p.value
+wilcox.test(glitchDat$deltat, mockdata$alldeltats[1:31], alternative = "two.sided")
+ks.test(glitchDat$delta_t, mockdata$alldeltats[1:43], alternative = "two.sided")
+wilcox.test(glitchDat$deltat, mockdata$alldeltats[1:43], alternative = "two.sided")
+
+ks.test(glitchDat$dF[1:31], mockdata$alldetanus6[1:51], alternative = "two.sided",exact = FALSE)
+
+#wilcox.test(glitchDat$dF[1:31], mockdata$alldetanus0[1:51], alternative = "two.sided")
+sum(mockdata$alldetanus6[1:51]< 5e-7)
+sum(mockdata$alldetanus6[1:51]> 5e-7)
+
+#plot confidence level for deltat and ecdf
+ecdf.ksCI(glitchDat$delta_t[1:31], main ='',ci.col ='',col ='black',cex = 0,cex.axis = axissize, cex.lab = labelfont, ylab ='ECDF', xlab = TeX('$\\Delta t $ (days)'))
+ecdf.ksCI(mockdata$alldeltats[1:51],main =NULL,col ='#990000',bg = 'transparent',lwd =2, cex = 0,cex.axis = axissize, cex.lab = labelfont, add =TRUE)
+#ecdf.ksCI(mockdata$alldeltats[1:73],main =NULL,col ='purple',cex = 2,cex.axis = axissize, cex.lab = labelfont, add =TRUE)
+legend("bottomright", legend = c(TeX('observed $\\Delta t$ for ~ 23 yrs'),TeX('simulated $\\Delta t $ for ~ 23 yrs')), col=c('black', '#990000' ),lty=1:1,lwd = 2, cex = 3)
+
+
+#plot confidence level for delta nu and ecdf
+ecdf.ksCI(glitchDat$dF[1:31], main ='',ci.col ='gray',col ='black',cex = 2,cex.axis = axissize, cex.lab = labelfont, ylab ='ECDF', xlab = TeX('$\\Delta \\nu $ (Hz)'))
+ecdf.ksCI(mockdata$alldetanus0[1:51],main =NULL,col ='pink',cex = 2,cex.axis = axissize, cex.lab = labelfont, add =TRUE)
+ecdf.ksCI(mockdata$alldetanus1[1:51],main =NULL,col ='cyan',bg = 'transparent',lwd =2, cex = 2,cex.axis = axissize, cex.lab = labelfont, add =TRUE)
+ecdf.ksCI(mockdata$alldetanus3[1:51],main =NULL,col ='darkcyan',bg = 'transparent',lwd =2, cex = 2,cex.axis = axissize, cex.lab = labelfont, add =TRUE)
+ecdf.ksCI(mockdata$alldetanus2[1:51],main =NULL,col ='darkblue',cex = 2,cex.axis = axissize, cex.lab = labelfont, add =TRUE)
+ecdf.ksCI(mockdata$alldetanus4[1:51],main =NULL,col ='darkred',cex = 2,cex.axis = axissize, cex.lab = labelfont, add =TRUE)
+ecdf.ksCI(mockdata$alldetanus5[1:51],main =NULL,col ='darkgreen',bg = 'transparent',lwd =2, cex = 2,cex.axis = axissize, cex.lab = labelfont, add =TRUE)
+ecdf.ksCI(mockdata$alldetanus6[1:51],main =NULL,col ='green',cex = 2,cex.axis = axissize, cex.lab = labelfont, add =TRUE)
+
+legend("bottomright", 
+       legend = c(TeX('Observed $\\Delta \\nu $'),TeX('$\\gamma_{1} $'),TeX('$\\gamma_{2} $'),TeX('$\\gamma_{3} $'),TeX('$\\gamma_{4} $'),TeX('$\\gamma_{5} $'),TeX('$\\gamma_{6} $'),TeX('$\\gamma_{0} $')),
+       col=c('black', 'cyan','darkblue','darkcyan','darkred','darkgreen','green','pink'),lty=1:1,lwd = 2, cex = 3,bg = 'transparent')
+
+#plot confidence level for delta nu and ecdf of varying N
+ecdf.ksCI(glitchDat$dF, main ='',ci.col ='gray',col ='black',cex = 2,cex.axis = axissize, cex.lab = labelfont, ylab ='ECDF', xlab = TeX('$\\Delta \\nu $ (Hz)'))
+ecdf.ksCI(mockdata$alldetanus2[1:31],main =NULL,col ='lightblue',bg = 'transparent',lwd =2, cex = 2,cex.axis = axissize, cex.lab = labelfont, add =TRUE)
+ecdf.ksCI(mockdata$alldetanus2[1:43],main =NULL,col ='darkblue',cex = 2,cex.axis = axissize, cex.lab = labelfont, add =TRUE)
+legend("bottomright", 
+       legend = c(TeX('Observed $\\Delta \\nu $'),TeX('$\\gamma_{2}$ for N = 31'),TeX('$\\gamma_{2}$ for N = 43')),
+       col=c('black','lightblue', 'darkblue'),lty=1:1,lwd = 2, cex = 4)
+
+
+#plot cdf
+sorted <- order(mockdata$result1$alldeltats)
+orderedX <-  (mockdata$result2$allXofts[-1])[sorted]
+ordereddeltats <- (mockdata$result1$alldeltats)[sorted]
+#cdfvalues <- cdfwait(deltat = ordereddeltats, X = orderedX, alpha =  1.29e-3, to = 4350.97, xo = 3.42)
+cdfvalues <- cdfwait(mockdata$result1$alldeltats, X = mockdata$result2$allXofts[-1], alpha =  1.29e-3, to = 4350.97, xo = 3.42)
+
 
